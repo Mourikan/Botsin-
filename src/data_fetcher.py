@@ -8,7 +8,7 @@ import json
 import os
 import time
 import zipfile
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
 import requests
@@ -38,9 +38,10 @@ def _get(url, params):
     raise RuntimeError(f"Binance klines no disponible ({url}): {last}")
 
 
-def fetch_archive(symbol, interval, limit):
+def fetch_archive(symbol, interval, limit, end=None):
     """Futuros USDT-M desde el archivo publico oficial (zips diarios, publicados con ~1 dia de retraso)."""
-    rows, day, misses = [], datetime.now(timezone.utc).date(), 0
+    day = date.fromisoformat(end) + timedelta(days=1) if end else datetime.now(timezone.utc).date()
+    rows, misses = [], 0   # `end` = ultimo dia incluido (YYYY-MM-DD) para fijar ventanas historicas
     while len(rows) < limit and misses < 4:
         day -= timedelta(days=1)
         r = requests.get(ARCHIVE.format(s=symbol, i=interval, d=day.isoformat()), timeout=30)
@@ -58,11 +59,11 @@ def fetch_archive(symbol, interval, limit):
     return rows
 
 
-def fetch_klines(symbol="SOLUSDT", interval="5m", limit=5000, market="futures"):
+def fetch_klines(symbol="SOLUSDT", interval="5m", limit=5000, market="futures", end=None):
     """Ultimas `limit` velas CERRADAS, paginando hacia atras."""
     limit = min(int(limit), MAX_CANDLES)
     if market == "futures-archive":
-        return _frame(fetch_archive(symbol, interval, limit), limit)
+        return _frame(fetch_archive(symbol, interval, limit, end), limit)
     url, page = MARKETS[market]
     rows, end = [], None
     while len(rows) < limit + 1:
@@ -104,15 +105,18 @@ def main():
     ap.add_argument("--limit", type=int, default=5000)
     ap.add_argument("--market", default="futures", choices=list(MARKETS) + ["futures-archive"])
     ap.add_argument("--out", default="data/sample_ohlcv.csv")
+    ap.add_argument("--end", default=None, help="ultimo dia incluido YYYY-MM-DD (solo archivo historico)")
     a = ap.parse_args()
+    if a.end:
+        a.market = "futures-archive"
     try:
-        df = fetch_klines(a.symbol, a.interval, a.limit, a.market)
+        df = fetch_klines(a.symbol, a.interval, a.limit, a.market, a.end)
     except RuntimeError as e:
         if a.market != "futures" or "451" not in str(e):
             raise
         print("AVISO: fapi geobloqueado (HTTP 451) -> usando archivo oficial data.binance.vision (mismas velas de Futuros)")
         a.market = "futures-archive"
-        df = fetch_klines(a.symbol, a.interval, a.limit, a.market)
+        df = fetch_klines(a.symbol, a.interval, a.limit, a.market, a.end)
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     df.to_csv(a.out, index=False)
     t = pd.to_datetime(df["open_time"], unit="ms")

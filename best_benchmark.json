@@ -105,5 +105,71 @@
   "winner": "A",
   "net": 38.76
  },
- "updated_utc": "2026-11-13 05:45:57"
+ "updated_utc": "2026-11-13 05:45:57",
+ "oos_validated": false,
+ "oos": {
+  "datasets": {
+   "BTC reciente": "5000 velas 2026-10-25 -> 2026-11-11",
+   "SOL 2024-03 tendencia": "5000 velas 2024-03-01 -> 2024-03-18"
+  },
+  "metrics": {
+   "BTC reciente": {
+    "A": {
+     "trades": 71,
+     "win_rate": 42.25,
+     "gross": 91.48,
+     "fees": 294.76,
+     "net": -203.28,
+     "pf": 0.663,
+     "expectancy": -2.863,
+     "p_value": 0.9673,
+     "open_at_end": 0
+    },
+    "A2": {
+     "trades": 46,
+     "win_rate": 45.65,
+     "gross": 81.92,
+     "fees": 163.38,
+     "net": -81.47,
+     "pf": 0.767,
+     "expectancy": -1.771,
+     "p_value": 0.8523,
+     "open_at_end": 0
+    }
+   },
+   "SOL 2024-03 tendencia": {
+    "A": {
+     "trades": 107,
+     "win_rate": 38.32,
+     "gross": -178.18,
+     "fees": 135.47,
+     "net": -313.65,
+     "pf": 0.586,
+     "expectancy": -2.9313,
+     "p_value": 0.9977,
+     "open_at_end": 1
+    },
+    "A2": {
+     "trades": 45,
+     "win_rate": 35.56,
+     "gross": -149.73,
+     "fees": 52.0,
+     "net": -201.73,
+     "pf": 0.378,
+     "expectancy": -4.483,
+     "p_value": 0.9996,
+     "open_at_end": 0
+    }
+   }
+  },
+  "net_total": {
+   "A": -516.93,
+   "A2": -283.2
+  },
+  "passed": {
+   "A": false,
+   "A2": false
+  },
+  "updated_utc": "2026-11-13 05:54:57"
+ }
 }

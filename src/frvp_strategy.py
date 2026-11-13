@@ -31,6 +31,10 @@ MODELS = {
     "C": dict(name="FRVP + RSI7 35/65", sig=dict(rsi="extreme"), parent="A"),
     "A1": dict(name="Anclaje Amplio 24v", feat=_WIDE, sim=_WIDE_SIM),
     "A2": dict(name="Anomalia de Volumen", sig=dict(anomaly=True), parent="A"),
+    # Diagnostico Fase 3: A1 descompuesto en sus 3 variables (no elegibles como modelo por defecto)
+    "V1": dict(name="Solo pivotes 24v", feat=_WIDE),
+    "V2": dict(name="Solo amplitud 0.45%", sim=dict(min_width=0.0045)),
+    "V3": dict(name="Solo sin timeout", sim=dict(max_hold=None)),
     "A3": dict(name="Sniper Institucional", feat=_WIDE, sim=_WIDE_SIM, sig=dict(anomaly=True), parent="A1"),
 }
 

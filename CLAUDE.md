@@ -25,6 +25,14 @@ Corre 100% en nube/navegador. Sin hardware local, sin TradingView, sin API keys.
   - Cada filtro declara su `parent`; solo es elegible si supera al padre en Net PnL sin bajar el Profit Factor.
 - **Agente 3 — Auditor (`src/probability_auditor.py`, `src/ablation_runner.py`):** Esperanza neta, Profit Factor, test binomial (`p < 0.05`) y torneo A/B/C. Ninguna estrategia se opera en real sin `p < 0.05` y Net > 0.
 
+## ESTADO (Fase 3, 2026-11-13): PREMISA BASE NO VALIDADA — REDISEÑO OBLIGATORIO
+- **OOS fallido:** A y A2 pierden en los 4 backtests fuera de muestra (BTCUSDT reciente y SOLUSDT 2024-03 en tendencia). Net OOS total: A −$516.93, A2 −$283.20; todos los p-value > 0.85.
+- La premisa "FRVP anclado a pivotes de 12 velas en 5m + reversión por absorción en VAL/VAH" **no tiene edge**. El +$38/+$41 in-sample era ruido.
+- **Prohibido** añadir más filtros o tunear parámetros sobre esta estructura. Antes de continuar hay que rediseñar el anclaje (p. ej. VWAP anclado, bloques de liquidez, perfil de sesión) y/o añadir filtro de régimen (no revertir contra tendencia).
+- Aislamiento de A1 (in-sample): el daño vino de los pivotes 24v (Net −$218.86). Amplitud 0.45% (+$64.66) y sin timeout (+$78.51) mejoraban a A por separado, pero no están validados OOS.
+- **Ratchet:** la métrica reina es Net PnL OOS. Todo candidato nuevo pasa por `python -m src.oos_validator` y solo se opera con Net > 0 y p < 0.05 en todos los datasets OOS. `best_benchmark.json` marca `oos_validated: false`.
+- Datasets OOS: `python -m src.data_fetcher --symbol BTCUSDT --market futures-archive --out data/oos_btc_recent.csv` y `python -m src.data_fetcher --symbol SOLUSDT --end 2024-03-18 --out data/oos_sol_2024_03.csv`.
+
 ## PROHIBIDO: look-ahead bias
 - POC/VAH/VAL de la vela `i` usan **solo** velas cerradas `≤ i-1` y pivotes confirmados `≤ i-1`.
 - La señal se evalúa al cierre de `i`; la orden limit al `close[i]` solo vive durante `i+1` y se llena si el precio la atraviesa.
