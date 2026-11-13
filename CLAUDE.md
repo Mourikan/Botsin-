@@ -34,11 +34,21 @@ Corre 100% en nube/navegador. Sin hardware local, sin TradingView, sin API keys.
 - Datasets OOS: `python -m src.data_fetcher --symbol BTCUSDT --market futures-archive --out data/oos_btc_recent.csv` y `python -m src.data_fetcher --symbol SOLUSDT --end 2024-03-18 --out data/oos_sol_2024_03.csv`.
 
 ## ESTADO (Fase 4, 2026-11-13): FILTRO DE RÉGIMEN VWAP NO RESCATA LA ESTRUCTURA
-- `R1` = A2 + amplitud 0.45% + sin timeout + régimen Rolling VWAP 24h (288 velas; solo longs con `close > VWAP`, solo shorts con `close < VWAP`).
+- `R0` (llamado R1 en su momento) = A2 + amplitud 0.45% + sin timeout + régimen Rolling VWAP 24h (288 velas; solo longs con `close > VWAP`, solo shorts con `close < VWAP`).
 - **Falla el test del ácido:** SOL 2024-03: 15 trades, WR 20%, Gross −$100.75, Net −$122.71. BTC reciente: 4 trades, WR 0%, Gross −$40.00, Net −$53.41. `oos_validated` sigue en `false`.
-- R1 pierde menos que A2 en total solo porque opera menos; por trade pierde más (SOL −$8.18 vs −$4.48). El puntero `winner = R1` de `best_benchmark.json` no significa que sea operable.
+- R0 pierde menos que A2 en total solo porque opera menos; por trade pierde más (SOL −$8.18 vs −$4.48). No es operable.
 - Conclusión: alinear la reversión con el VWAP no arregla el gatillo "mecha en VAL/VAH del perfil de swing de 12 velas". El problema está en la entrada/estructura, no solo en la dirección.
 - **Los datasets OOS ya están contaminados** (se han usado para diseñar en Fases 3 y 4). El próximo candidato necesita un holdout nuevo que no se mire hasta el final.
+
+## ESTADO (Fase 4b, 2026-11-13): ÁRBITRO DE RÉGIMEN — NINGÚN MODELO GANA DINERO
+- **Base permanente** (`BASE_SIM` en `src/frvp_strategy.py`): pivotes 12v, amplitud ≥ 0.45%, sin timeout, TP1 en el POC. Pivotes 24v descartados.
+- `src/regime_arbiter.py`: sesgo (VWAP_288 + migración del POC a 24 velas, ±0.05%), `ER_48`, Gatillo 1 (absorción: `RVOL ≥ 1.4` + mecha ≥ 40% + delta de absorción o de giro) y Gatillo 2 (ruptura con `RVOL ≥ 1.5` en las 3 velas previas + retest, `ER_48 ≥ 0.28`; SL 0.8·ATR, TP 1.3R/2.5R/4R).
+- `R1` = sesgo + Gatillo 1 · `R2` = Gatillo 1 sin sesgo · `R3` = sesgo + Gatillo 1 + Gatillo 2.
+- **Torneo (SOL reciente IS + SOL 2024-03 + BTC reciente), Net consolidado:** R1 −$28.92 (7 trades), R2 −$170.39 (48), R3 −$219.70 (51). Los 9 backtests tienen Net negativo; `oos_validated: false`.
+- `winner = R1` solo porque casi no opera (7 trades en 15,000 velas): **no es un edge ni es operable**.
+- El sesgo sí ayuda al Gatillo 1 en tendencia (SOL 2024-03: R1 WR 80% y Gross +$3 vs R2 −$15), pero con 5 trades no es evidencia. El Gatillo 2 resta en SOL y sus fees triplican el bruto en BTC (stop de 0.8·ATR ⇒ nocional alto).
+- Los 3 datasets están contaminados por diseño iterativo. Próximo candidato: holdout nuevo, intocable hasta el final, y más historia (el tope de 5,000 velas deja muestras de 1–20 trades).
+- Torneo: `python -m src.oos_validator > logs/tournament.log 2>&1; tail -n 20 logs/tournament.log`. Con el árbitro hay que usar `prepare(f, modelo)` (no `generate_signals`) antes de `simulate`.
 
 ## PROHIBIDO: look-ahead bias
 - POC/VAH/VAL de la vela `i` usan **solo** velas cerradas `≤ i-1` y pivotes confirmados `≤ i-1`.

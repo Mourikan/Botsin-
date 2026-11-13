@@ -13,8 +13,10 @@ from numpy.lib.stride_tricks import sliding_window_view as swv
 
 try:
     from src.frvp_engine import profile_levels, synthetic
+    from src.regime_arbiter import arbitrate
 except ImportError:
     from frvp_engine import profile_levels, synthetic
+    from regime_arbiter import arbitrate
 
 BENCH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "best_benchmark.json")
 PARAMS = dict(bins=60, va_pct=0.70, pivot_k=12, min_len=36, max_len=288, atr_n=14, rsi_n=7,
@@ -25,26 +27,33 @@ PARAMS = dict(bins=60, va_pct=0.70, pivot_k=12, min_len=36, max_len=288, atr_n=1
 # parent = modelo sin ese filtro: el ratchet exige superarlo en Net PnL y Profit Factor.
 _WIDE = dict(pivot_k=24, min_len=72, max_len=500)
 _WIDE_SIM = dict(min_width=0.0045, max_hold=None)
+# BASE PERMANENTE (Fase 4): pivotes 12v (PARAMS), amplitud >= 0.45%, sin timeout, TP1 en el POC.
+# Los modelos anteriores (A..A3, V*, R0) quedan solo como registro historico reproducible.
+BASE_SIM = dict(min_width=0.0045, max_hold=None, tp1_path=1.0, tp1_min_r=0.0)
 MODELS = {
     "A": dict(name="Pure FRVP + Delta"),
     "B": dict(name="FRVP + RSI7 MicroDiv", sig=dict(rsi="div"), parent="A"),
     "C": dict(name="FRVP + RSI7 35/65", sig=dict(rsi="extreme"), parent="A"),
     "A1": dict(name="Anclaje Amplio 24v", feat=_WIDE, sim=_WIDE_SIM),
     "A2": dict(name="Anomalia de Volumen", sig=dict(anomaly=True), parent="A"),
-    # Fase 4: A2 + amplitud 0.45% + sin timeout + regimen VWAP 24h (solo longs sobre VWAP, solo shorts bajo VWAP)
-    "R1": dict(name="Regimen VWAP 24h", sig=dict(anomaly=True, regime="vwap"), sim=_WIDE_SIM),
+    # Fase 4a (descartado): A2 + amplitud 0.45% + sin timeout + regimen VWAP 24h
+    "R0": dict(name="Regimen VWAP 24h", sig=dict(anomaly=True, regime="vwap"), sim=_WIDE_SIM),
     # Diagnostico Fase 3: A1 descompuesto en sus 3 variables (no elegibles como modelo por defecto)
     "V1": dict(name="Solo pivotes 24v", feat=_WIDE),
     "V2": dict(name="Solo amplitud 0.45%", sim=dict(min_width=0.0045)),
     "V3": dict(name="Solo sin timeout", sim=dict(max_hold=None)),
     "A3": dict(name="Sniper Institucional", feat=_WIDE, sim=_WIDE_SIM, sig=dict(anomaly=True), parent="A1"),
+    # Fase 4b: arbitro de regimen (src/regime_arbiter.py) sobre la BASE PERMANENTE
+    "R1": dict(name="Trend-Aligned Fade", arb=dict(use_bias=True, g2=False), sim=BASE_SIM),
+    "R2": dict(name="Absorcion Pura", arb=dict(use_bias=False, g2=False), sim=BASE_SIM),
+    "R3": dict(name="Arbitro Completo AMT", arb=dict(use_bias=True, g2=True), sim=BASE_SIM),
 }
 
 
 def spec(model):
     m = MODELS[model]
     return dict(name=m["name"], feat=m.get("feat", {}), sig=m.get("sig", {}), sim=m.get("sim", {}),
-                parent=m.get("parent"))
+                parent=m.get("parent"), arb=m.get("arb"))
 
 
 def active_model():
@@ -126,7 +135,10 @@ def generate_signals(f, model=None, **kw):
     Filtros RSI(7) opcionales: "div" (micro-divergencia t-1 -> t) o "extreme" (<35 / >65).
     """
     p = {**PARAMS, **kw}
-    sg = spec(model or active_model())["sig"]
+    model = model or active_model()
+    if spec(model)["arb"] is not None:
+        return prepare(f, model)[1]
+    sg = spec(model)["sig"]
     h, l, c = f["high"].to_numpy(), f["low"].to_numpy(), f["close"].to_numpy()
     dlt, rsi, rvol = f["volume_delta"].to_numpy(), f["rsi"].to_numpy(), f["rvol"].to_numpy()
     if sg.get("anomaly"):
@@ -155,6 +167,14 @@ def generate_signals(f, model=None, **kw):
     return sig
 
 
+def prepare(f, model=None):
+    """(frame, sig) listos para futures_simulator.simulate. Los modelos del arbitro pueden devolver
+    una copia del frame con los niveles de salida del Gatillo 2 en sus filas de senal."""
+    model = model or active_model()
+    arb = spec(model)["arb"]
+    return arbitrate(f, **arb) if arb is not None else (f, generate_signals(f, model))
+
+
 def selftest():
     """Causalidad: alterar velas > k no puede cambiar features ni senales en filas <= k."""
     df, k = synthetic(1500, 11), 1200
@@ -167,7 +187,9 @@ def selftest():
         s = spec(m)
         a, b = build_features(df, **s["feat"]), build_features(d2, **s["feat"])
         ok &= np.allclose(a.loc[:k, cols], b.loc[:k, cols], equal_nan=True)
-        ok &= np.array_equal(generate_signals(a, m)[:k + 1], generate_signals(b, m)[:k + 1])
+        (fa, sa), (fb, sb) = prepare(a, m), prepare(b, m)
+        ok &= np.array_equal(sa[:k + 1], sb[:k + 1])
+        ok &= np.allclose(fa.loc[:k, cols], fb.loc[:k, cols], equal_nan=True)
         x = a.dropna(subset=["poc"])
         ok &= len(x) > 0 and bool(((x.swing_low <= x.val) & (x.val <= x.poc) & (x.poc <= x.vah)
                                    & (x.vah <= x.swing_high)).all())

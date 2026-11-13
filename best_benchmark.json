@@ -1,6 +1,6 @@
 {
  "winner": "R1",
- "winner_name": "Regimen VWAP 24h",
+ "winner_name": "Trend-Aligned Fade",
  "edge_significant": false,
  "dataset": {
   "symbol": "SOLUSDT",
@@ -11,59 +11,55 @@
   "last": "2026-11-11 23:55:00"
  },
  "metrics": {
-  "A": {
-   "trades": 97,
-   "win_rate": 50.52,
-   "gross": 311.92,
-   "fees": 273.15,
-   "net": 38.76,
-   "pf": 1.06,
-   "expectancy": 0.3996,
-   "p_value": 0.4264,
+  "R1": {
+   "trades": 1,
+   "win_rate": 0.0,
+   "gross": -10.0,
+   "fees": 4.9,
+   "net": -14.9,
+   "pf": 0.0,
+   "expectancy": -14.8993,
+   "p_value": 1.0,
    "open_at_end": 0
   },
-  "A1": {
-   "trades": 72,
-   "win_rate": 38.89,
-   "gross": -7.97,
-   "fees": 203.2,
-   "net": -211.17,
-   "pf": 0.642,
-   "expectancy": -2.9329,
-   "p_value": 0.9756,
+  "R2": {
+   "trades": 19,
+   "win_rate": 36.84,
+   "gross": -44.58,
+   "fees": 40.89,
+   "net": -85.47,
+   "pf": 0.344,
+   "expectancy": -4.4982,
+   "p_value": 0.9944,
    "open_at_end": 0
   },
-  "A2": {
-   "trades": 55,
-   "win_rate": 54.55,
-   "gross": 182.22,
-   "fees": 141.27,
-   "net": 40.95,
-   "pf": 1.123,
-   "expectancy": 0.7446,
-   "p_value": 0.3851,
-   "open_at_end": 0
-  },
-  "A3": {
-   "trades": 39,
-   "win_rate": 43.59,
-   "gross": 24.61,
-   "fees": 92.98,
-   "net": -68.37,
-   "pf": 0.758,
-   "expectancy": -1.7532,
-   "p_value": 0.8461,
+  "R3": {
+   "trades": 15,
+   "win_rate": 26.67,
+   "gross": -28.0,
+   "fees": 53.61,
+   "net": -81.61,
+   "pf": 0.476,
+   "expectancy": -5.4408,
+   "p_value": 0.9446,
    "open_at_end": 0
   }
  },
  "winner_spec": {
-  "name": "Anomalia de Volumen",
+  "name": "Trend-Aligned Fade",
   "feat": {},
-  "sig": {
-   "anomaly": true
+  "sig": {},
+  "sim": {
+   "min_width": 0.0045,
+   "max_hold": null,
+   "tp1_path": 1.0,
+   "tp1_min_r": 0.0
   },
-  "sim": {},
-  "parent": "A"
+  "parent": null,
+  "arb": {
+   "use_bias": true,
+   "g2": false
+  }
  },
  "base_params": {
   "bins": 60,
@@ -107,69 +103,134 @@
  },
  "updated_utc": "2026-11-13 05:45:57",
  "oos_validated": false,
- "oos": {
+ "tournament": {
   "datasets": {
-   "BTC reciente": "5000 velas 2026-10-25 -> 2026-11-11",
-   "SOL 2024-03 tendencia": "5000 velas 2024-03-01 -> 2024-03-18"
+   "SOL reciente (IS)": "5000 velas 2026-10-25 -> 2026-11-11",
+   "SOL 2024-03 tendencia": "5000 velas 2024-03-01 -> 2024-03-18",
+   "BTC reciente": "5000 velas 2026-10-25 -> 2026-11-11"
   },
   "metrics": {
-   "BTC reciente": {
-    "A2": {
-     "trades": 46,
-     "win_rate": 45.65,
-     "gross": 81.92,
-     "fees": 163.38,
-     "net": -81.47,
-     "pf": 0.767,
-     "expectancy": -1.771,
-     "p_value": 0.8523,
+   "SOL reciente (IS)": {
+    "R1": {
+     "trades": 1,
+     "win_rate": 0.0,
+     "gross": -10.0,
+     "fees": 4.9,
+     "net": -14.9,
+     "pf": 0.0,
+     "expectancy": -14.8993,
+     "p_value": 1.0,
      "open_at_end": 0
     },
-    "R1": {
-     "trades": 4,
-     "win_rate": 0.0,
-     "gross": -40.0,
-     "fees": 13.41,
-     "net": -53.41,
-     "pf": 0.0,
-     "expectancy": -13.3529,
-     "p_value": 1.0,
+    "R2": {
+     "trades": 19,
+     "win_rate": 36.84,
+     "gross": -44.58,
+     "fees": 40.89,
+     "net": -85.47,
+     "pf": 0.344,
+     "expectancy": -4.4982,
+     "p_value": 0.9944,
+     "open_at_end": 0
+    },
+    "R3": {
+     "trades": 15,
+     "win_rate": 26.67,
+     "gross": -28.0,
+     "fees": 53.61,
+     "net": -81.61,
+     "pf": 0.476,
+     "expectancy": -5.4408,
+     "p_value": 0.9446,
      "open_at_end": 0
     }
    },
    "SOL 2024-03 tendencia": {
-    "A2": {
-     "trades": 45,
-     "win_rate": 35.56,
-     "gross": -149.73,
-     "fees": 52.0,
-     "net": -201.73,
-     "pf": 0.378,
-     "expectancy": -4.483,
-     "p_value": 0.9996,
+    "R1": {
+     "trades": 5,
+     "win_rate": 80.0,
+     "gross": 3.02,
+     "fees": 4.38,
+     "net": -1.36,
+     "pf": 0.876,
+     "expectancy": -0.2721,
+     "p_value": 0.7783,
      "open_at_end": 0
     },
+    "R2": {
+     "trades": 17,
+     "win_rate": 58.82,
+     "gross": -15.23,
+     "fees": 16.91,
+     "net": -32.14,
+     "pf": 0.59,
+     "expectancy": -1.8909,
+     "p_value": 0.9079,
+     "open_at_end": 0
+    },
+    "R3": {
+     "trades": 13,
+     "win_rate": 46.15,
+     "gross": -28.0,
+     "fees": 15.16,
+     "net": -43.17,
+     "pf": 0.459,
+     "expectancy": -3.3206,
+     "p_value": 0.9546,
+     "open_at_end": 0
+    }
+   },
+   "BTC reciente": {
     "R1": {
-     "trades": 15,
-     "win_rate": 20.0,
-     "gross": -100.75,
-     "fees": 21.96,
-     "net": -122.71,
-     "pf": 0.109,
-     "expectancy": -8.1806,
+     "trades": 1,
+     "win_rate": 0.0,
+     "gross": -10.0,
+     "fees": 2.66,
+     "net": -12.66,
+     "pf": 0.0,
+     "expectancy": -12.6606,
      "p_value": 1.0,
+     "open_at_end": 0
+    },
+    "R2": {
+     "trades": 12,
+     "win_rate": 16.67,
+     "gross": -15.82,
+     "fees": 36.96,
+     "net": -52.78,
+     "pf": 0.453,
+     "expectancy": -4.3985,
+     "p_value": 0.922,
+     "open_at_end": 0
+    },
+    "R3": {
+     "trades": 23,
+     "win_rate": 43.48,
+     "gross": 26.98,
+     "fees": 121.9,
+     "net": -94.92,
+     "pf": 0.492,
+     "expectancy": -4.1269,
+     "p_value": 0.972,
      "open_at_end": 0
     }
    }
   },
   "net_total": {
-   "A2": -283.2,
-   "R1": -176.12
+   "R1": -28.92,
+   "R2": -170.39,
+   "R3": -219.7
+  },
+  "trades_total": {
+   "R1": 7,
+   "R2": 48,
+   "R3": 51
   },
   "passed": {
-   "A2": false,
-   "R1": false
+   "R1": false,
+   "R2": false,
+   "R3": false
   },
-  "updated_utc": "2026-11-13 06:04:40"
+  "updated_utc": "2026-11-13 06:16:20"
  }
 }
