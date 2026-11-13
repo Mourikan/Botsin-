@@ -10,7 +10,7 @@ Corre 100% en nube/navegador. Sin hardware local, sin TradingView, sin API keys.
 5. **AUTO-REPORTE:** Al final de cada respuesta, 1 línea con archivos tocados y estimado de tokens.
 
 ## Agentes internos
-- **Agente 1 — Datos & Simulador (`src/data_fetcher.py`, `src/futures_simulator.py`):** solo `numpy`, `pandas`, `requests`/`aiohttp`. Máx. 5,000 velas.
+- **Agente 1 — Datos & Simulador (`src/data_fetcher.py`, `src/futures_simulator.py`):** solo `numpy`, `pandas`, `requests`/`aiohttp`. Máx. 5,000 velas en REST/diario; el histórico mensual (`--months`, Fase 5) es la excepción para muestras largas.
   - Datos: Binance Futures USDT-M (`fapi/v1/klines`) con `taker_buy_volume`, `taker_sell_volume`, `volume_delta`. Si `fapi` devuelve 451 (geobloqueo del servidor cloud) se usa el archivo público oficial `data.binance.vision` (mismas velas, ~1 día de retraso). No se evade el geobloqueo.
   - Simulador: capital $1,000, riesgo fijo 1% ($10) por trade, tope 10x. Entrada y TP = Maker 0.02%; stops y timeout = Taker 0.05% + 0.02% slippage.
   - Filtro pre-trade: no operar si `(VAH−VAL)/POC < 0.35%` ni si la vela de entrada pisa ±3 min de funding (00/08/16 UTC).
@@ -50,12 +50,22 @@ Corre 100% en nube/navegador. Sin hardware local, sin TradingView, sin API keys.
 - Los 3 datasets están contaminados por diseño iterativo. Próximo candidato: holdout nuevo, intocable hasta el final, y más historia (el tope de 5,000 velas deja muestras de 1–20 trades).
 - Torneo: `python -m src.oos_validator > logs/tournament.log 2>&1; tail -n 20 logs/tournament.log`. Con el árbitro hay que usar `prepare(f, modelo)` (no `generate_signals`) antes de `simulate`.
 
+## ESTADO (Fase 5, 2026-11-13): SESIÓN FIJA + BARRIDO 2 TIEMPOS — NO PASA EL EVENT STUDY, HOLDOUT SELLADO
+- Datos: 6 meses 5m (2026-05-01 → 2026-10-31, 52,992 velas) SOL y BTC en `data/*_5m_6m.csv.gz` (`python -m src.data_fetcher --symbol SOLUSDT --months 2026-05:2026-10 --out data/solusdt_5m_6m.csv.gz`).
+- Split pre-registrado (`src/event_study_and_backtest.py`): Desarrollo = primer 70% de días (hasta 2026-09-06); Holdout = resto hasta 2026-10-24 (los días ≥ 2026-10-25 se excluyen: contaminados por Fases 1–4).
+- `src/session_frvp.py`: POC/VAH/VAL del día UTC anterior congelados todo el día, POC de 5 días, CVD de sesión. `session_signals` (S1/S2/S3) en `src/frvp_strategy.py`.
+- **Event Study SOL Desarrollo:** S1 n=30, +12v +0.377 ATR, p=0.315 · S2 n=17, +0.416, p=0.373 · S3 n=5, +0.166, p=0.793. Regla de paso (≥ 0.30 ATR y p < 0.05): **ninguna pasa**. BTC no confirma (S1 +0.115, p=0.82).
+- Diagnóstico IS (no validado): S1 TP1_100% Net +$36.24, PF 1.19 (28 trades); la escalera empata. S2/S3 pierden.
+- **El holdout no se ha ejecutado.** Prohibido bajar el umbral o tunear mirando estos números para "hacer pasar" S1.
+- Problema real: tamaño de muestra. El suelo de stop 0.35% deja 30 de 83 señales en 128 días. Con la dispersión observada (~2 ATR) detectar +0.38 ATR con p < 0.05 requiere ~450 señales: pool de varios perpetuos líquidos y/o ≥ 2 años.
+- `futures_simulator`: corregido que una posición cerrada al 100% por los TP siguiera bloqueando nuevas entradas (no afecta a modelos anteriores).
+
 ## PROHIBIDO: look-ahead bias
 - POC/VAH/VAL de la vela `i` usan **solo** velas cerradas `≤ i-1` y pivotes confirmados `≤ i-1`.
 - La señal se evalúa al cierre de `i`; la orden limit al `close[i]` solo vive durante `i+1` y se llena si el precio la atraviesa.
 - Dentro de una vela el stop se evalúa **antes** que los TP (peor caso); sin TP en la vela de fill.
 - La vela aún abierta se descarta en el fetcher.
-- Todo cambio debe pasar `python -m src.frvp_engine --selftest` y `python -m src.frvp_strategy --selftest`.
+- Todo cambio debe pasar `python -m src.frvp_engine --selftest`, `python -m src.frvp_strategy --selftest` y `python -m src.session_frvp --selftest`.
 
 ## Comandos
 ```bash

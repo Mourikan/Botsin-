@@ -18,7 +18,8 @@ MARKETS = {  # nombre -> (url, max velas por request)
     "spot": ("https://api.binance.com/api/v3/klines", 1000),
 }
 ARCHIVE = "https://data.binance.vision/data/futures/um/daily/klines/{s}/{i}/{s}-{i}-{d}.zip"
-MAX_CANDLES = 5000
+MONTHLY = "https://data.binance.vision/data/futures/um/monthly/klines/{s}/{i}/{s}-{i}-{m}.zip"
+MAX_CANDLES = 5000  # tope para descargas REST/diarias; el historico mensual (--months) es la excepcion documentada
 NUM = ["open", "high", "low", "close", "volume", "taker_buy_volume"]
 
 
@@ -81,6 +82,19 @@ def fetch_klines(symbol="SOLUSDT", interval="5m", limit=5000, market="futures", 
     return _frame(rows, limit)
 
 
+def fetch_months(symbol, interval, first, last):
+    """Historico largo desde zips MENSUALES (YYYY-MM inclusive). Sin tope de velas."""
+    rows, m = [], pd.Period(first, "M")
+    while m <= pd.Period(last, "M"):
+        r = requests.get(MONTHLY.format(s=symbol, i=interval, m=str(m)), timeout=60)
+        r.raise_for_status()
+        with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+            d = pd.read_csv(z.open(z.namelist()[0]), header=None)
+        rows += d[pd.to_numeric(d[0], errors="coerce").notna()].values.tolist()
+        m += 1
+    return _frame(rows, None)
+
+
 def _frame(rows, limit):
     df = pd.DataFrame([[r[0], r[1], r[2], r[3], r[4], r[5], r[9], r[6]] for r in rows],
                       columns=["open_time"] + NUM + ["close_time"])
@@ -91,7 +105,7 @@ def _frame(rows, limit):
             df[k] //= 1000
     df = df.drop_duplicates("open_time").sort_values("open_time")
     df = df[df["close_time"] < int(time.time() * 1000)]  # descarta la vela aun abierta (anti look-ahead)
-    df = df.tail(limit).reset_index(drop=True).drop(columns="close_time")
+    df = (df.tail(limit) if limit else df).reset_index(drop=True).drop(columns="close_time")
     df[NUM] = df[NUM].astype("float64")
     df["taker_sell_volume"] = df["volume"] - df["taker_buy_volume"]
     df["volume_delta"] = df["taker_buy_volume"] - df["taker_sell_volume"]
@@ -106,7 +120,14 @@ def main():
     ap.add_argument("--market", default="futures", choices=list(MARKETS) + ["futures-archive"])
     ap.add_argument("--out", default="data/sample_ohlcv.csv")
     ap.add_argument("--end", default=None, help="ultimo dia incluido YYYY-MM-DD (solo archivo historico)")
+    ap.add_argument("--months", default=None, help="rango mensual YYYY-MM:YYYY-MM (historico largo, csv.gz)")
     a = ap.parse_args()
+    if a.months:
+        first, last = a.months.split(":")
+        df = fetch_months(a.symbol, a.interval, first, last)
+        a.market = "futures-archive-monthly"
+        _save(df, a)
+        return
     if a.end:
         a.market = "futures-archive"
     try:
@@ -117,12 +138,16 @@ def main():
         print("AVISO: fapi geobloqueado (HTTP 451) -> usando archivo oficial data.binance.vision (mismas velas de Futuros)")
         a.market = "futures-archive"
         df = fetch_klines(a.symbol, a.interval, a.limit, a.market, a.end)
+    _save(df, a)
+
+
+def _save(df, a):
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
-    df.to_csv(a.out, index=False)
+    df.to_csv(a.out, index=False)  # extension .csv.gz => comprimido
     t = pd.to_datetime(df["open_time"], unit="ms")
     meta = {"symbol": a.symbol, "interval": a.interval, "market": a.market, "rows": len(df),
             "first": str(t.iloc[0]), "last": str(t.iloc[-1])}
-    with open(os.path.splitext(a.out)[0] + ".meta.json", "w") as f:
+    with open(a.out.replace(".gz", "").rsplit(".", 1)[0] + ".meta.json", "w") as f:
         json.dump(meta, f)
     print(f"{a.market} {a.symbol} {a.interval}: {len(df)} velas [{meta['first']} -> {meta['last']}] -> {a.out}")
 

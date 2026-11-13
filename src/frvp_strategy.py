@@ -175,6 +175,61 @@ def prepare(f, model=None):
     return arbitrate(f, **arb) if arb is not None else (f, generate_signals(f, model))
 
 
+# ---------------- Fase 5: FRVP de sesion fija + barrido en 2 tiempos (src/session_frvp.py) ----------------
+SESSION_VARIANTS = {
+    "S1": dict(name="Sesion + Barrido 2T", cvd=False, week=False),
+    "S2": dict(name="S1 + Divergencia CVD", cvd=True, week=False),
+    "S3": dict(name="S2 + Regimen 5 dias", cvd=True, week=True),
+}
+SESSION_RULES = dict(k_max=12, sl_atr=0.35, min_stop=0.0035)
+_S_SIM = dict(min_width=0.0045, max_hold=None, sl_atr=0.35, tp1_path=1.0, tp1_min_r=0.0)
+SESSION_EXITS = {"TP1_100%": dict(_S_SIM, split=(1.0, 0.0, 0.0)),
+                 "Escalera": dict(_S_SIM, split=(0.5, 0.5, 0.0))}
+
+
+def session_signals(f, variant, **kw):
+    """+1/-1 al cierre de t. LONG: alguna vela t-k (1..12, misma sesion) toco VAL_prev (sweep_low_1 = su minimo);
+    t barre por debajo (low_t < sweep_low_1) y cierra de vuelta sobre VAL_prev y bajo POC_prev.
+    cvd: CVD_t > CVD_(t-k) (divergencia de flujo). week: close sobre el POC de 5 dias. Espejo en VAH_prev.
+    Regla anti-fees: se descarta si |entry - SL| / entry < 0.35%, SL = low_t - 0.35*ATR."""
+    p, v = {**SESSION_RULES, **kw}, SESSION_VARIANTS[variant]
+    h, l, c, atr, val, vah, poc, cvd, pw = (f[k].to_numpy(np.float64) for k in (
+        "high", "low", "close", "atr", "val_prev", "vah_prev", "poc_prev", "cvd", "poc_week"))
+    day, n = f["day"].to_numpy(), len(f)
+    lo1, hi1 = np.full(n, np.inf), np.full(n, -np.inf)
+    jl, jh = np.full(n, -1), np.full(n, -1)
+    for k in range(1, p["k_max"] + 1):
+        idx = np.arange(n) - k
+        same = np.zeros(n, bool)
+        same[k:] = day[k:] == day[:-k]
+        lk, hk = np.r_[np.full(k, np.nan), l[:-k]], np.r_[np.full(k, np.nan), h[:-k]]
+        with np.errstate(invalid="ignore"):
+            cl, ch = same & (lk <= val) & (lk < lo1), same & (hk >= vah) & (hk > hi1)
+        lo1, jl = np.where(cl, lk, lo1), np.where(cl, idx, jl)
+        hi1, jh = np.where(ch, hk, hi1), np.where(ch, idx, jh)
+    with np.errstate(invalid="ignore"):
+        long = (jl >= 0) & (l < lo1) & (c > val) & (c < poc)
+        short = (jh >= 0) & (h > hi1) & (c < vah) & (c > poc)
+        if v["cvd"]:
+            long &= cvd > cvd[np.maximum(jl, 0)]
+            short &= cvd < cvd[np.maximum(jh, 0)]
+        if v["week"]:
+            long &= c > pw
+            short &= c < pw
+        long &= (c - (l - p["sl_atr"] * atr)) / c >= p["min_stop"]
+        short &= ((h + p["sl_atr"] * atr) - c) / c >= p["min_stop"]
+    sig = np.zeros(n, np.int8)
+    sig[long] = 1
+    sig[short & ~long] = -1
+    return sig
+
+
+def session_sim_frame(f):
+    """Columnas que espera futures_simulator: TP1 = POC_prev, TP2 = VAH_prev/VAL_prev (TP3 = TP2)."""
+    return f.assign(poc=f["poc_prev"], vah=f["vah_prev"], val=f["val_prev"],
+                    swing_high=f["vah_prev"], swing_low=f["val_prev"])
+
+
 def selftest():
     """Causalidad: alterar velas > k no puede cambiar features ni senales en filas <= k."""
     df, k = synthetic(1500, 11), 1200

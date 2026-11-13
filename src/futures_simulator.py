@@ -79,7 +79,7 @@ def simulate(f, sig, **kw):
                     stop = entry * (1 + sd * p["be_offset"])               # breakeven neto
                 elif stage == 2:
                     stop = max(stop, poc[i]) if sd > 0 else min(stop, poc[i])
-            if stage == 3:
+            if stage == 3 or rem <= 1e-9:                                  # posicion ya cerrada por los TP
                 rem = 0.0
                 break
         if rem > 1e-9:                                                     # timeout / fin de datos (mark-to-market)
