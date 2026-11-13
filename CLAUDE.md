@@ -33,6 +33,13 @@ Corre 100% en nube/navegador. Sin hardware local, sin TradingView, sin API keys.
 - **Ratchet:** la métrica reina es Net PnL OOS. Todo candidato nuevo pasa por `python -m src.oos_validator` y solo se opera con Net > 0 y p < 0.05 en todos los datasets OOS. `best_benchmark.json` marca `oos_validated: false`.
 - Datasets OOS: `python -m src.data_fetcher --symbol BTCUSDT --market futures-archive --out data/oos_btc_recent.csv` y `python -m src.data_fetcher --symbol SOLUSDT --end 2024-03-18 --out data/oos_sol_2024_03.csv`.
 
+## ESTADO (Fase 4, 2026-11-13): FILTRO DE RÉGIMEN VWAP NO RESCATA LA ESTRUCTURA
+- `R1` = A2 + amplitud 0.45% + sin timeout + régimen Rolling VWAP 24h (288 velas; solo longs con `close > VWAP`, solo shorts con `close < VWAP`).
+- **Falla el test del ácido:** SOL 2024-03: 15 trades, WR 20%, Gross −$100.75, Net −$122.71. BTC reciente: 4 trades, WR 0%, Gross −$40.00, Net −$53.41. `oos_validated` sigue en `false`.
+- R1 pierde menos que A2 en total solo porque opera menos; por trade pierde más (SOL −$8.18 vs −$4.48). El puntero `winner = R1` de `best_benchmark.json` no significa que sea operable.
+- Conclusión: alinear la reversión con el VWAP no arregla el gatillo "mecha en VAL/VAH del perfil de swing de 12 velas". El problema está en la entrada/estructura, no solo en la dirección.
+- **Los datasets OOS ya están contaminados** (se han usado para diseñar en Fases 3 y 4). El próximo candidato necesita un holdout nuevo que no se mire hasta el final.
+
 ## PROHIBIDO: look-ahead bias
 - POC/VAH/VAL de la vela `i` usan **solo** velas cerradas `≤ i-1` y pivotes confirmados `≤ i-1`.
 - La señal se evalúa al cierre de `i`; la orden limit al `close[i]` solo vive durante `i+1` y se llena si el precio la atraviesa.

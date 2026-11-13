@@ -1,6 +1,6 @@
 {
- "winner": "A2",
- "winner_name": "Anomalia de Volumen",
+ "winner": "R1",
+ "winner_name": "Regimen VWAP 24h",
  "edge_significant": false,
  "dataset": {
   "symbol": "SOLUSDT",
@@ -114,17 +114,6 @@
   },
   "metrics": {
    "BTC reciente": {
-    "A": {
-     "trades": 71,
-     "win_rate": 42.25,
-     "gross": 91.48,
-     "fees": 294.76,
-     "net": -203.28,
-     "pf": 0.663,
-     "expectancy": -2.863,
-     "p_value": 0.9673,
-     "open_at_end": 0
-    },
     "A2": {
      "trades": 46,
      "win_rate": 45.65,
@@ -135,20 +124,20 @@
      "expectancy": -1.771,
      "p_value": 0.8523,
      "open_at_end": 0
+    },
+    "R1": {
+     "trades": 4,
+     "win_rate": 0.0,
+     "gross": -40.0,
+     "fees": 13.41,
+     "net": -53.41,
+     "pf": 0.0,
+     "expectancy": -13.3529,
+     "p_value": 1.0,
+     "open_at_end": 0
     }
    },
    "SOL 2024-03 tendencia": {
-    "A": {
-     "trades": 107,
-     "win_rate": 38.32,
-     "gross": -178.18,
-     "fees": 135.47,
-     "net": -313.65,
-     "pf": 0.586,
-     "expectancy": -2.9313,
-     "p_value": 0.9977,
-     "open_at_end": 1
-    },
     "A2": {
      "trades": 45,
      "win_rate": 35.56,
@@ -159,17 +148,28 @@
      "expectancy": -4.483,
      "p_value": 0.9996,
      "open_at_end": 0
+    },
+    "R1": {
+     "trades": 15,
+     "win_rate": 20.0,
+     "gross": -100.75,
+     "fees": 21.96,
+     "net": -122.71,
+     "pf": 0.109,
+     "expectancy": -8.1806,
+     "p_value": 1.0,
+     "open_at_end": 0
     }
    }
   },
   "net_total": {
-   "A": -516.93,
-   "A2": -283.2
+   "A2": -283.2,
+   "R1": -176.12
   },
   "passed": {
-   "A": false,
-   "A2": false
+   "A2": false,
+   "R1": false
   },
-  "updated_utc": "2026-11-13 05:54:57"
+  "updated_utc": "2026-11-13 06:04:40"
  }
 }

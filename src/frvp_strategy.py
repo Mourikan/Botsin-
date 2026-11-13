@@ -19,7 +19,7 @@ except ImportError:
 BENCH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "best_benchmark.json")
 PARAMS = dict(bins=60, va_pct=0.70, pivot_k=12, min_len=36, max_len=288, atr_n=14, rsi_n=7,
               rvol_n=20, rvol_min=1.2, wick_min=0.35, rsi_lo=35.0, rsi_hi=65.0,
-              anomaly_rvol=1.7, anomaly_side=1.5)
+              anomaly_rvol=1.7, anomaly_side=1.5, vwap_n=288)
 
 # feat -> build_features | sig -> generate_signals | sim -> futures_simulator.simulate
 # parent = modelo sin ese filtro: el ratchet exige superarlo en Net PnL y Profit Factor.
@@ -31,6 +31,8 @@ MODELS = {
     "C": dict(name="FRVP + RSI7 35/65", sig=dict(rsi="extreme"), parent="A"),
     "A1": dict(name="Anclaje Amplio 24v", feat=_WIDE, sim=_WIDE_SIM),
     "A2": dict(name="Anomalia de Volumen", sig=dict(anomaly=True), parent="A"),
+    # Fase 4: A2 + amplitud 0.45% + sin timeout + regimen VWAP 24h (solo longs sobre VWAP, solo shorts bajo VWAP)
+    "R1": dict(name="Regimen VWAP 24h", sig=dict(anomaly=True, regime="vwap"), sim=_WIDE_SIM),
     # Diagnostico Fase 3: A1 descompuesto en sus 3 variables (no elegibles como modelo por defecto)
     "V1": dict(name="Solo pivotes 24v", feat=_WIDE),
     "V2": dict(name="Solo amplitud 0.45%", sim=dict(min_width=0.0045)),
@@ -107,6 +109,8 @@ def build_features(df, **kw):
     f["rvol"] = v / _prev_sma(v, p["rvol_n"])
     f["buy_rvol"] = buy / _prev_sma(buy, p["rvol_n"])
     f["sell_rvol"] = sell / _prev_sma(sell, p["rvol_n"])
+    tpv = pd.Series((h + l + c) / 3.0 * v).rolling(p["vwap_n"]).sum()   # VWAP rolling, incluye la vela i (cerrada)
+    f["vwap"] = (tpv / pd.Series(v).rolling(p["vwap_n"]).sum()).to_numpy()
     rng = np.maximum(h - l, 1e-12)
     f["wick_lo"] = (np.minimum(o, c) - l) / rng
     f["wick_hi"] = (h - np.maximum(o, c)) / rng
@@ -141,6 +145,10 @@ def generate_signals(f, model=None, **kw):
     elif sg.get("rsi") == "extreme":  # agotamiento simple
         long = long & (rsi < p["rsi_lo"])
         short = short & (rsi > p["rsi_hi"])
+    if sg.get("regime") == "vwap":    # reversion solo a favor del flujo macro
+        vw = f["vwap"].to_numpy()
+        long = long & (c > vw)
+        short = short & (c < vw)
     sig = np.zeros(len(f), np.int8)
     sig[long] = 1
     sig[short & ~long] = -1
@@ -153,7 +161,7 @@ def selftest():
     d2 = df.copy()
     d2.loc[k + 1:, ["open", "high", "low", "close"]] *= 1.4
     d2.loc[k + 1:, ["volume", "volume_delta"]] *= 7
-    cols = ["poc", "vah", "val", "swing_low", "swing_high", "atr", "rsi", "rvol", "buy_rvol", "sell_rvol"]
+    cols = ["poc", "vah", "val", "swing_low", "swing_high", "atr", "rsi", "rvol", "buy_rvol", "sell_rvol", "vwap"]
     ok = True
     for m in MODELS:
         s = spec(m)
