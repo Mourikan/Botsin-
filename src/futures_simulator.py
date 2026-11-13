@@ -57,7 +57,8 @@ def simulate(f, sig, **kw):
         qty = notional / entry
         tps = (tp1, tp2, tp3)
         gross, fees, rem, stage, stop = 0.0, notional * p["maker"], 1.0, 0, sl
-        last = min(e + p["max_hold"], n) - 1
+        last = n - 1 if p["max_hold"] is None else min(e + p["max_hold"], n) - 1  # None = sin timeout
+        eod = False
         t = e
         for t in range(e, last + 1):
             if (l[t] <= stop) if sd > 0 else (h[t] >= stop):
@@ -81,12 +82,13 @@ def simulate(f, sig, **kw):
             if stage == 3:
                 rem = 0.0
                 break
-        if rem > 1e-9:                                                     # timeout / fin de datos
+        if rem > 1e-9:                                                     # timeout / fin de datos (mark-to-market)
+            eod = p["max_hold"] is None or t == n - 1
             gross += rem * qty * (c[t] - entry) * sd
             fees += rem * qty * c[t] * stop_cost
         net = gross - fees
         equity += net
         free = t
-        trades.append((i, t, sd, entry, sl, notional, stage, gross, fees, net, equity))
+        trades.append((i, t, sd, entry, sl, notional, stage, gross, fees, net, equity, eod))
     return pd.DataFrame(trades, columns=["sig_bar", "exit_bar", "side", "entry", "sl", "notional",
-                                         "tps_hit", "gross", "fees", "net", "equity"])
+                                         "tps_hit", "gross", "fees", "net", "equity", "open_at_end"])

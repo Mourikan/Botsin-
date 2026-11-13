@@ -17,6 +17,12 @@ Corre 100% en nube/navegador. Sin hardware local, sin TradingView, sin API keys.
 - **Agente 2 — Estrategia (`src/frvp_engine.py`, `src/frvp_strategy.py`):** FRVP de 60 bins anclado al último swing estructural (pivotes confirmados), VA 70%, ATR(14).
   - Entrada: mecha toca VAL/VAH y cierra dentro del área de valor, con (`RVOL ≥ 1.2` o mecha ≥ 35%) y `volume_delta` a favor.
   - SL: extremo del barrido ± `0.5·ATR`. TP1 40% (90% del camino al POC, mín. 1.2R) → SL a BE neto (±0.08%); TP2 40% (extremo opuesto del VA) → SL al POC; TP3 20% (swing externo).
+- **Modelos (`MODELS` en `src/frvp_strategy.py`; el activo es `winner` de `best_benchmark.json`):**
+  - `A` base Fase 1 (pivotes 12v, perfil 36–288 velas, amplitud 0.35%, timeout 144 velas). `B`/`C` = A + filtros RSI (descartados).
+  - `A1` anclaje amplio: pivotes 24v, perfil 72–500 velas, amplitud 0.45%, sin timeout (solo SL o escalera TP).
+  - `A2` = A + anomalía de volumen: `RVOL ≥ 1.7` o volumen taker del lado del trade `> 1.5x` su media de 20 velas (sustituye a RVOL 1.2/mecha).
+  - `A3` = A1 + anomalía de volumen.
+  - Cada filtro declara su `parent`; solo es elegible si supera al padre en Net PnL sin bajar el Profit Factor.
 - **Agente 3 — Auditor (`src/probability_auditor.py`, `src/ablation_runner.py`):** Esperanza neta, Profit Factor, test binomial (`p < 0.05`) y torneo A/B/C. Ninguna estrategia se opera en real sin `p < 0.05` y Net > 0.
 
 ## PROHIBIDO: look-ahead bias

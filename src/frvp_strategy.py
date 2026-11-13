@@ -17,22 +17,47 @@ except ImportError:
     from frvp_engine import profile_levels, synthetic
 
 BENCH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "best_benchmark.json")
-MODELS = {"A": "Pure FRVP + Delta", "B": "FRVP + RSI7 MicroDiv", "C": "FRVP + RSI7 35/65"}
 PARAMS = dict(bins=60, va_pct=0.70, pivot_k=12, min_len=36, max_len=288, atr_n=14, rsi_n=7,
-              rvol_n=20, rvol_min=1.2, wick_min=0.35, rsi_lo=35.0, rsi_hi=65.0)
+              rvol_n=20, rvol_min=1.2, wick_min=0.35, rsi_lo=35.0, rsi_hi=65.0,
+              anomaly_rvol=1.7, anomaly_side=1.5)
+
+# feat -> build_features | sig -> generate_signals | sim -> futures_simulator.simulate
+# parent = modelo sin ese filtro: el ratchet exige superarlo en Net PnL y Profit Factor.
+_WIDE = dict(pivot_k=24, min_len=72, max_len=500)
+_WIDE_SIM = dict(min_width=0.0045, max_hold=None)
+MODELS = {
+    "A": dict(name="Pure FRVP + Delta"),
+    "B": dict(name="FRVP + RSI7 MicroDiv", sig=dict(rsi="div"), parent="A"),
+    "C": dict(name="FRVP + RSI7 35/65", sig=dict(rsi="extreme"), parent="A"),
+    "A1": dict(name="Anclaje Amplio 24v", feat=_WIDE, sim=_WIDE_SIM),
+    "A2": dict(name="Anomalia de Volumen", sig=dict(anomaly=True), parent="A"),
+    "A3": dict(name="Sniper Institucional", feat=_WIDE, sim=_WIDE_SIM, sig=dict(anomaly=True), parent="A1"),
+}
+
+
+def spec(model):
+    m = MODELS[model]
+    return dict(name=m["name"], feat=m.get("feat", {}), sig=m.get("sig", {}), sim=m.get("sim", {}),
+                parent=m.get("parent"))
 
 
 def active_model():
     """Modelo por defecto = ganador guardado por el ratchet (A si aun no hay benchmark)."""
     try:
         with open(BENCH) as f:
-            return json.load(f)["winner"]
+            w = json.load(f)["winner"]
+        return w if w in MODELS else "A"
     except (OSError, KeyError, ValueError):
         return "A"
 
 
 def _wilder(x, n):
     return pd.Series(x).ewm(alpha=1.0 / n, adjust=False, min_periods=n).mean().to_numpy()
+
+
+def _prev_sma(x, n):
+    """SMA de las n velas previas (excluye la actual)."""
+    return pd.Series(x).rolling(n).mean().shift(1).to_numpy()
 
 
 def _last_pivot(x, k, is_high):
@@ -73,7 +98,11 @@ def build_features(df, **kw):
     d = np.diff(c, prepend=c[0])
     up, dn = _wilder(np.clip(d, 0, None), p["rsi_n"]), _wilder(np.clip(-d, 0, None), p["rsi_n"])
     f["rsi"] = 100.0 - 100.0 / (1.0 + up / np.maximum(dn, 1e-12))
-    f["rvol"] = v / pd.Series(v).rolling(p["rvol_n"]).mean().shift(1).to_numpy()
+    dlt = df["volume_delta"].to_numpy(np.float64)
+    buy, sell = (v + dlt) / 2.0, (v - dlt) / 2.0         # taker buy / taker sell
+    f["rvol"] = v / _prev_sma(v, p["rvol_n"])
+    f["buy_rvol"] = buy / _prev_sma(buy, p["rvol_n"])
+    f["sell_rvol"] = sell / _prev_sma(sell, p["rvol_n"])
     rng = np.maximum(h - l, 1e-12)
     f["wick_lo"] = (np.minimum(o, c) - l) / rng
     f["wick_hi"] = (h - np.maximum(o, c)) / rng
@@ -83,27 +112,31 @@ def build_features(df, **kw):
 def generate_signals(f, model=None, **kw):
     """+1 long / -1 short al cierre de la vela i.
 
-    Base (A): mecha toca VAL/VAH y cierra dentro del area de valor, con (RVOL o mecha) y
-    volume_delta a favor del rechazo. B y C anaden un filtro RSI(7) sobre A.
+    Base: mecha toca VAL/VAH, cierra dentro del area de valor y volume_delta a favor, mas
+      - normal:  RVOL >= 1.2 o mecha >= 35% del rango
+      - anomaly: RVOL >= 1.7 o volumen taker del lado del trade > 1.5x su media de 20 velas
+    Filtros RSI(7) opcionales: "div" (micro-divergencia t-1 -> t) o "extreme" (<35 / >65).
     """
     p = {**PARAMS, **kw}
-    model = model or active_model()
+    sg = spec(model or active_model())["sig"]
     h, l, c = f["high"].to_numpy(), f["low"].to_numpy(), f["close"].to_numpy()
-    dlt, rsi = f["volume_delta"].to_numpy(), f["rsi"].to_numpy()
-    strong = f["rvol"].to_numpy() >= p["rvol_min"]
-    long = ((l <= f["val"]) & (c > f["val"]) & (c < f["poc"]) & (dlt > 0)
-            & (strong | (f["wick_lo"] >= p["wick_min"]))).to_numpy()
-    short = ((h >= f["vah"]) & (c < f["vah"]) & (c > f["poc"]) & (dlt < 0)
-             & (strong | (f["wick_hi"] >= p["wick_min"]))).to_numpy()
-    if model == "B":      # micro-divergencia t-1 -> t: precio hace nuevo extremo, RSI no
+    dlt, rsi, rvol = f["volume_delta"].to_numpy(), f["rsi"].to_numpy(), f["rvol"].to_numpy()
+    if sg.get("anomaly"):
+        big = rvol >= p["anomaly_rvol"]
+        abs_l = big | (f["buy_rvol"].to_numpy() > p["anomaly_side"])
+        abs_s = big | (f["sell_rvol"].to_numpy() > p["anomaly_side"])
+    else:
+        abs_l = (rvol >= p["rvol_min"]) | (f["wick_lo"].to_numpy() >= p["wick_min"])
+        abs_s = (rvol >= p["rvol_min"]) | (f["wick_hi"].to_numpy() >= p["wick_min"])
+    long = ((l <= f["val"]) & (c > f["val"]) & (c < f["poc"])).to_numpy() & (dlt > 0) & abs_l
+    short = ((h >= f["vah"]) & (c < f["vah"]) & (c > f["poc"])).to_numpy() & (dlt < 0) & abs_s
+    if sg.get("rsi") == "div":        # precio hace nuevo extremo, RSI no
         pr, pl_, ph_ = np.r_[np.nan, rsi[:-1]], np.r_[np.nan, l[:-1]], np.r_[np.nan, h[:-1]]
         long = long & (l <= pl_) & (rsi > pr)
         short = short & (h >= ph_) & (rsi < pr)
-    elif model == "C":    # agotamiento simple
+    elif sg.get("rsi") == "extreme":  # agotamiento simple
         long = long & (rsi < p["rsi_lo"])
         short = short & (rsi > p["rsi_hi"])
-    elif model != "A":
-        raise ValueError(f"modelo desconocido: {model}")
     sig = np.zeros(len(f), np.int8)
     sig[long] = 1
     sig[short & ~long] = -1
@@ -112,22 +145,25 @@ def generate_signals(f, model=None, **kw):
 
 def selftest():
     """Causalidad: alterar velas > k no puede cambiar features ni senales en filas <= k."""
-    df, k = synthetic(900, 11), 700
+    df, k = synthetic(1500, 11), 1200
     d2 = df.copy()
     d2.loc[k + 1:, ["open", "high", "low", "close"]] *= 1.4
     d2.loc[k + 1:, ["volume", "volume_delta"]] *= 7
-    a, b = build_features(df), build_features(d2)
-    cols = ["poc", "vah", "val", "swing_low", "swing_high", "atr", "rsi", "rvol"]
-    ok = np.allclose(a.loc[:k, cols], b.loc[:k, cols], equal_nan=True)
-    ok &= all(np.array_equal(generate_signals(a, m)[:k + 1], generate_signals(b, m)[:k + 1]) for m in MODELS)
-    x = a.dropna(subset=["poc"])
-    ok &= len(x) > 0 and bool(((x.swing_low <= x.val) & (x.val <= x.poc) & (x.poc <= x.vah)
-                               & (x.vah <= x.swing_high)).all())
+    cols = ["poc", "vah", "val", "swing_low", "swing_high", "atr", "rsi", "rvol", "buy_rvol", "sell_rvol"]
+    ok = True
+    for m in MODELS:
+        s = spec(m)
+        a, b = build_features(df, **s["feat"]), build_features(d2, **s["feat"])
+        ok &= np.allclose(a.loc[:k, cols], b.loc[:k, cols], equal_nan=True)
+        ok &= np.array_equal(generate_signals(a, m)[:k + 1], generate_signals(b, m)[:k + 1])
+        x = a.dropna(subset=["poc"])
+        ok &= len(x) > 0 and bool(((x.swing_low <= x.val) & (x.val <= x.poc) & (x.poc <= x.vah)
+                                   & (x.vah <= x.swing_high)).all())
     print("SELFTEST strategy", "OK" if ok else "FAIL")
-    return ok
+    return bool(ok)
 
 
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         sys.exit(0 if selftest() else 1)
-    print("modelo activo:", active_model(), "-", MODELS[active_model()])
+    print("modelo activo:", active_model(), "-", MODELS[active_model()]["name"])

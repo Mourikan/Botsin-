@@ -1,6 +1,6 @@
 {
- "winner": "A",
- "winner_name": "Pure FRVP + Delta",
+ "winner": "A2",
+ "winner_name": "Anomalia de Volumen",
  "edge_significant": false,
  "dataset": {
   "symbol": "SOLUSDT",
@@ -19,30 +19,53 @@
    "net": 38.76,
    "pf": 1.06,
    "expectancy": 0.3996,
-   "p_value": 0.4264
+   "p_value": 0.4264,
+   "open_at_end": 0
   },
-  "B": {
-   "trades": 50,
-   "win_rate": 48.0,
-   "gross": 87.4,
-   "fees": 132.72,
-   "net": -45.32,
-   "pf": 0.869,
-   "expectancy": -0.9065,
-   "p_value": 0.7382
+  "A1": {
+   "trades": 72,
+   "win_rate": 38.89,
+   "gross": -7.97,
+   "fees": 203.2,
+   "net": -211.17,
+   "pf": 0.642,
+   "expectancy": -2.9329,
+   "p_value": 0.9756,
+   "open_at_end": 0
   },
-  "C": {
-   "trades": 25,
-   "win_rate": 36.0,
-   "gross": 20.45,
-   "fees": 88.07,
-   "net": -67.62,
-   "pf": 0.69,
-   "expectancy": -2.7048,
-   "p_value": 0.8642
+  "A2": {
+   "trades": 55,
+   "win_rate": 54.55,
+   "gross": 182.22,
+   "fees": 141.27,
+   "net": 40.95,
+   "pf": 1.123,
+   "expectancy": 0.7446,
+   "p_value": 0.3851,
+   "open_at_end": 0
+  },
+  "A3": {
+   "trades": 39,
+   "win_rate": 43.59,
+   "gross": 24.61,
+   "fees": 92.98,
+   "net": -68.37,
+   "pf": 0.758,
+   "expectancy": -1.7532,
+   "p_value": 0.8461,
+   "open_at_end": 0
   }
  },
- "strategy_params": {
+ "winner_spec": {
+  "name": "Anomalia de Volumen",
+  "feat": {},
+  "sig": {
+   "anomaly": true
+  },
+  "sim": {},
+  "parent": "A"
+ },
+ "base_params": {
   "bins": 60,
   "va_pct": 0.7,
   "pivot_k": 12,
@@ -54,9 +77,11 @@
   "rvol_min": 1.2,
   "wick_min": 0.35,
   "rsi_lo": 35.0,
-  "rsi_hi": 65.0
+  "rsi_hi": 65.0,
+  "anomaly_rvol": 1.7,
+  "anomaly_side": 1.5
  },
- "sim_config": {
+ "base_sim_config": {
   "capital": 1000.0,
   "risk_pct": 0.01,
   "max_lev": 10.0,
@@ -76,5 +101,9 @@
   ],
   "max_hold": 144
  },
- "updated_utc": "2026-11-13 05:36:11"
+ "previous": {
+  "winner": "A",
+  "net": 38.76
+ },
+ "updated_utc": "2026-11-13 05:45:57"
 }
