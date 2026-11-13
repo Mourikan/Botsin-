@@ -1,6 +1,7 @@
-"""Agente 2 - Fixed Range Volume Profile rolling, vectorizado en NumPy.
+"""Agente 2 - Fixed Range Volume Profile vectorizado en NumPy.
 
-Causalidad: el perfil de la vela i usa SOLO las N velas cerradas previas [i-N, i-1].
+Causalidad: el perfil de la vela i usa SOLO velas cerradas previas (<= i-1).
+`profile_levels` es el nucleo (ventanas fijas o de largo variable via mascara).
 """
 import sys
 
@@ -30,57 +31,76 @@ def _value_area(prof, poc, va_pct):
     return lo, hi
 
 
-def compute_frvp(df, lookback=120, bins=48, va_pct=0.70, chunk=256):
-    """Anade poc_price, vah_price, val_price, poc_dist_pct y rvol. Primeras `lookback` filas = NaN.
+def profile_levels(H, L, V, bins=48, va_pct=0.70, mask=None, chunk=128):
+    """Perfiles por fila sobre matrices (W, N). mask=False excluye velas (ventana de largo variable).
 
-    El volumen de cada vela se reparte uniformemente sobre los bins que cubre su rango [low, high].
+    Devuelve poc, vah, val, range_low, range_high. El volumen de cada vela se reparte
+    uniformemente sobre los bins que cubre su rango [low, high].
     """
+    W = H.shape[0]
+    poc, vah, val, rlo, rhi = (np.empty(W) for _ in range(5))
+    ar = np.arange(bins)
+    for s in range(0, W, chunk):
+        sl = slice(s, s + chunk)
+        Hc, Lc, Vc = H[sl], L[sl], V[sl]
+        if mask is None:
+            pmin, pmax = Lc.min(axis=1), Hc.max(axis=1)
+        else:
+            Mc = mask[sl]
+            Vc = np.where(Mc, Vc, 0.0)
+            pmin = np.where(Mc, Lc, np.inf).min(axis=1)
+            pmax = np.where(Mc, Hc, -np.inf).max(axis=1)
+        step = np.maximum((pmax - pmin) / bins, 1e-12)
+        edges = pmin[:, None] + step[:, None] * np.arange(bins + 1)        # (w, B+1)
+        ov = np.minimum(Hc[:, :, None], edges[:, None, 1:]) - np.maximum(Lc[:, :, None], edges[:, None, :-1])
+        np.clip(ov, 0.0, None, out=ov)                                     # (w, N, B)
+        rng = (Hc - Lc)[:, :, None]
+        flat = rng <= 0                                                    # doji sin rango: todo a su bin
+        idx = np.clip(((Hc - pmin[:, None]) / step[:, None]).astype(np.int64), 0, bins - 1)
+        frac = np.where(flat, ar == idx[:, :, None], ov / np.where(flat, 1.0, rng))
+        prof = (frac * Vc[:, :, None]).sum(axis=1)                         # (w, B)
+        p = prof.argmax(axis=1)
+        lo, hi = _value_area(prof, p, va_pct)
+        poc[sl] = pmin + (p + 0.5) * step
+        val[sl] = pmin + lo * step
+        vah[sl] = pmin + (hi + 1) * step
+        rlo[sl], rhi[sl] = pmin, pmax
+    return poc, vah, val, rlo, rhi
+
+
+def compute_frvp(df, lookback=120, bins=48, va_pct=0.70):
+    """FRVP rolling de N velas previas. Anade poc_price, vah_price, val_price, poc_dist_pct, rvol."""
     h, l, c, v = (df[k].to_numpy(np.float64) for k in ("high", "low", "close", "volume"))
     n = len(df)
     out = {k: np.full(n, np.nan) for k in ("poc_price", "vah_price", "val_price", "rvol")}
     if n <= lookback:
         return df.assign(**out, poc_dist_pct=np.nan)
-
-    # ventana w cubre velas [w, w+N-1] y alimenta a la vela i = w+N  -> se descarta la ultima ventana
+    # ventana w cubre [w, w+N-1] y alimenta a la vela i = w+N -> se descarta la ultima ventana
     H, L, V = (swv(a, lookback)[:-1] for a in (h, l, v))
-    W = H.shape[0]
-    poc = np.empty(W); vah = np.empty(W); val = np.empty(W)
-    for s in range(0, W, chunk):
-        Hc, Lc, Vc = H[s:s + chunk], L[s:s + chunk], V[s:s + chunk]
-        pmin = Lc.min(axis=1)
-        step = np.maximum((Hc.max(axis=1) - pmin) / bins, 1e-12)
-        edges = pmin[:, None] + step[:, None] * np.arange(bins + 1)        # (w, B+1)
-        b_lo, b_hi = edges[:, None, :-1], edges[:, None, 1:]               # (w, 1, B)
-        ov = np.minimum(Hc[:, :, None], b_hi) - np.maximum(Lc[:, :, None], b_lo)
-        np.clip(ov, 0.0, None, out=ov)                                     # (w, N, B)
-        rng = (Hc - Lc)[:, :, None]
-        flat = rng <= 0                                                    # doji sin rango: todo a su bin
-        idx = np.clip(((Hc - pmin[:, None]) / step[:, None]).astype(np.int64), 0, bins - 1)
-        frac = np.where(flat, np.arange(bins) == idx[:, :, None], ov / np.where(flat, 1.0, rng))
-        prof = (frac * Vc[:, :, None]).sum(axis=1)                         # (w, B)
-        p = prof.argmax(axis=1)
-        lo, hi = _value_area(prof, p, va_pct)
-        poc[s:s + chunk] = pmin + (p + 0.5) * step
-        val[s:s + chunk] = pmin + lo * step
-        vah[s:s + chunk] = pmin + (hi + 1) * step
-
+    poc, vah, val, _, _ = profile_levels(H, L, V, bins, va_pct)
     out["poc_price"][lookback:] = poc
     out["vah_price"][lookback:] = vah
     out["val_price"][lookback:] = val
-    out["rvol"][lookback:] = v[lookback:] / np.maximum(V.mean(axis=1), 1e-12)  # vela i cerrada vs media previa
+    out["rvol"][lookback:] = v[lookback:] / np.maximum(V.mean(axis=1), 1e-12)
     res = df.assign(**out)
     res["poc_dist_pct"] = (c - res["poc_price"]) / res["poc_price"] * 100.0
     return res
 
 
-def selftest():
-    """Causalidad: alterar velas >= k no puede cambiar niveles en filas <= k."""
-    rs = np.random.default_rng(7)
-    n, k = 600, 400
+def synthetic(n=600, seed=7):
+    rs = np.random.default_rng(seed)
     c = 100 + np.cumsum(rs.normal(0, 0.3, n))
     o = c + rs.normal(0, 0.1, n)
-    df = pd.DataFrame({"open": o, "close": c, "high": np.maximum(o, c) + rs.random(n) * 0.3,
-                       "low": np.minimum(o, c) - rs.random(n) * 0.3, "volume": rs.random(n) * 100 + 1})
+    v = rs.random(n) * 100 + 1
+    return pd.DataFrame({"open_time": np.arange(n) * 300_000, "open": o, "close": c,
+                         "high": np.maximum(o, c) + rs.random(n) * 0.3,
+                         "low": np.minimum(o, c) - rs.random(n) * 0.3,
+                         "volume": v, "volume_delta": v * rs.uniform(-1, 1, n)})
+
+
+def selftest():
+    """Causalidad: alterar velas >= k no puede cambiar niveles en filas <= k."""
+    df, k = synthetic(), 400
     a = compute_frvp(df)
     d2 = df.copy()
     d2.loc[k:, ["open", "high", "low", "close"]] *= 1.5
@@ -90,7 +110,7 @@ def selftest():
     ok = np.allclose(a.loc[:k, cols], b.loc[:k, cols], equal_nan=True)
     x = a.dropna()
     ok &= bool(((x.val_price <= x.poc_price) & (x.poc_price <= x.vah_price)).all())
-    print("SELFTEST", "OK" if ok else "FAIL")
+    print("SELFTEST engine", "OK" if ok else "FAIL")
     return ok
 
 

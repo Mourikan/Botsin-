@@ -1,3 +1,4 @@
 data/*.csv
+data/*.meta.json
 logs/
 __pycache__/

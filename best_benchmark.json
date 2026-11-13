@@ -1,0 +1,80 @@
+{
+ "winner": "A",
+ "winner_name": "Pure FRVP + Delta",
+ "edge_significant": false,
+ "dataset": {
+  "symbol": "SOLUSDT",
+  "interval": "5m",
+  "market": "futures-archive",
+  "rows": 5000,
+  "first": "2026-10-25 15:20:00",
+  "last": "2026-11-11 23:55:00"
+ },
+ "metrics": {
+  "A": {
+   "trades": 97,
+   "win_rate": 50.52,
+   "gross": 311.92,
+   "fees": 273.15,
+   "net": 38.76,
+   "pf": 1.06,
+   "expectancy": 0.3996,
+   "p_value": 0.4264
+  },
+  "B": {
+   "trades": 50,
+   "win_rate": 48.0,
+   "gross": 87.4,
+   "fees": 132.72,
+   "net": -45.32,
+   "pf": 0.869,
+   "expectancy": -0.9065,
+   "p_value": 0.7382
+  },
+  "C": {
+   "trades": 25,
+   "win_rate": 36.0,
+   "gross": 20.45,
+   "fees": 88.07,
+   "net": -67.62,
+   "pf": 0.69,
+   "expectancy": -2.7048,
+   "p_value": 0.8642
+  }
+ },
+ "strategy_params": {
+  "bins": 60,
+  "va_pct": 0.7,
+  "pivot_k": 12,
+  "min_len": 36,
+  "max_len": 288,
+  "atr_n": 14,
+  "rsi_n": 7,
+  "rvol_n": 20,
+  "rvol_min": 1.2,
+  "wick_min": 0.35,
+  "rsi_lo": 35.0,
+  "rsi_hi": 65.0
+ },
+ "sim_config": {
+  "capital": 1000.0,
+  "risk_pct": 0.01,
+  "max_lev": 10.0,
+  "maker": 0.0002,
+  "taker": 0.0005,
+  "slip": 0.0002,
+  "min_width": 0.0035,
+  "funding_guard_min": 3,
+  "sl_atr": 0.5,
+  "tp1_path": 0.9,
+  "tp1_min_r": 1.2,
+  "be_offset": 0.0008,
+  "split": [
+   0.4,
+   0.4,
+   0.2
+  ],
+  "max_hold": 144
+ },
+ "updated_utc": "2026-11-13 05:36:11"
+}
